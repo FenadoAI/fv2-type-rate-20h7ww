@@ -101,12 +101,12 @@ const Home = () => {
           {/* From Currency */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-3">From</label>
-            <div className="flex gap-3 mb-3">
+            <div className="flex gap-2 mb-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-blue-300 scrollbar-track-gray-100">
               {POPULAR_CURRENCIES.map((curr) => (
                 <button
                   key={curr.code}
                   onClick={() => setFromCurrency(curr.code)}
-                  className={`flex-1 py-3 px-2 rounded-xl border-2 transition-all duration-200 transform hover:scale-105 ${
+                  className={`flex-shrink-0 py-3 px-3 min-w-[70px] rounded-xl border-2 transition-all duration-200 transform hover:scale-105 ${
                     fromCurrency === curr.code
                       ? 'border-blue-500 bg-blue-50 shadow-md'
                       : 'border-gray-200 hover:border-blue-300'
@@ -141,12 +141,12 @@ const Home = () => {
           {/* To Currency */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-3">To</label>
-            <div className="flex gap-3 mb-3">
+            <div className="flex gap-2 mb-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-blue-300 scrollbar-track-gray-100">
               {POPULAR_CURRENCIES.map((curr) => (
                 <button
                   key={curr.code}
                   onClick={() => setToCurrency(curr.code)}
-                  className={`flex-1 py-3 px-2 rounded-xl border-2 transition-all duration-200 transform hover:scale-105 ${
+                  className={`flex-shrink-0 py-3 px-3 min-w-[70px] rounded-xl border-2 transition-all duration-200 transform hover:scale-105 ${
                     toCurrency === curr.code
                       ? 'border-blue-500 bg-blue-50 shadow-md'
                       : 'border-gray-200 hover:border-blue-300'
