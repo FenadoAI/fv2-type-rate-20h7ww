@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from starlette.middleware.cors import CORSMiddleware
 
 from ai_agents.agents import AgentConfig, ChatAgent, SearchAgent
+import httpx
 
 
 logging.basicConfig(
@@ -62,6 +63,23 @@ class SearchResponse(BaseModel):
     summary: str
     search_results: Optional[dict] = None
     sources_count: int
+    error: Optional[str] = None
+
+
+class CurrencyConvertRequest(BaseModel):
+    from_currency: str
+    to_currency: str
+    amount: float
+
+
+class CurrencyConvertResponse(BaseModel):
+    success: bool
+    from_currency: str
+    to_currency: str
+    amount: float
+    converted_amount: float
+    rate: float
+    timestamp: str
     error: Optional[str] = None
 
 
@@ -234,6 +252,120 @@ async def get_agent_capabilities(request: Request):
     except Exception as exc:  # pragma: no cover - defensive
         logger.exception("Error getting capabilities")
         return {"success": False, "error": str(exc)}
+
+
+@api_router.get("/currency/rates")
+async def get_currency_rates(base_currency: str = "USD"):
+    """Fetch latest exchange rates from CurrencyAPI."""
+    api_key = os.getenv("CURRENCYAPI_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="CurrencyAPI key not configured")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://api.currencyapi.com/v3/latest",
+                params={"apikey": api_key, "base_currency": base_currency},
+                timeout=10.0
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            return {
+                "success": True,
+                "base_currency": base_currency,
+                "rates": data.get("data", {}),
+                "timestamp": data.get("meta", {}).get("last_updated_at", "")
+            }
+    except httpx.HTTPError as exc:
+        logger.exception("Error fetching currency rates")
+        raise HTTPException(status_code=502, detail=f"Currency API error: {str(exc)}")
+    except Exception as exc:
+        logger.exception("Unexpected error fetching currency rates")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/currency/convert", response_model=CurrencyConvertResponse)
+async def convert_currency(convert_request: CurrencyConvertRequest):
+    """Convert an amount from one currency to another."""
+    api_key = os.getenv("CURRENCYAPI_KEY")
+    if not api_key:
+        return CurrencyConvertResponse(
+            success=False,
+            from_currency=convert_request.from_currency,
+            to_currency=convert_request.to_currency,
+            amount=convert_request.amount,
+            converted_amount=0,
+            rate=0,
+            timestamp="",
+            error="CurrencyAPI key not configured"
+        )
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://api.currencyapi.com/v3/latest",
+                params={
+                    "apikey": api_key,
+                    "base_currency": convert_request.from_currency,
+                    "currencies": convert_request.to_currency
+                },
+                timeout=10.0
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            rates = data.get("data", {})
+            to_currency_data = rates.get(convert_request.to_currency, {})
+            rate = to_currency_data.get("value", 0)
+
+            if rate == 0:
+                return CurrencyConvertResponse(
+                    success=False,
+                    from_currency=convert_request.from_currency,
+                    to_currency=convert_request.to_currency,
+                    amount=convert_request.amount,
+                    converted_amount=0,
+                    rate=0,
+                    timestamp="",
+                    error="Currency rate not found"
+                )
+
+            converted_amount = convert_request.amount * rate
+
+            return CurrencyConvertResponse(
+                success=True,
+                from_currency=convert_request.from_currency,
+                to_currency=convert_request.to_currency,
+                amount=convert_request.amount,
+                converted_amount=round(converted_amount, 2),
+                rate=rate,
+                timestamp=data.get("meta", {}).get("last_updated_at", "")
+            )
+    except httpx.HTTPError as exc:
+        logger.exception("Error converting currency")
+        return CurrencyConvertResponse(
+            success=False,
+            from_currency=convert_request.from_currency,
+            to_currency=convert_request.to_currency,
+            amount=convert_request.amount,
+            converted_amount=0,
+            rate=0,
+            timestamp="",
+            error=f"Currency API error: {str(exc)}"
+        )
+    except Exception as exc:
+        logger.exception("Unexpected error converting currency")
+        return CurrencyConvertResponse(
+            success=False,
+            from_currency=convert_request.from_currency,
+            to_currency=convert_request.to_currency,
+            amount=convert_request.amount,
+            converted_amount=0,
+            rate=0,
+            timestamp="",
+            error=str(exc)
+        )
 
 
 app.include_router(api_router)
